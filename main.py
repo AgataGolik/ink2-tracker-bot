@@ -1,9 +1,10 @@
 import os
 import time
 import json
+import threading
 from dotenv import load_dotenv
 from web3 import Web3
-from telegram import Update
+from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, CallbackContext
 
 # Wczytanie zmiennych środowiskowych
@@ -12,6 +13,8 @@ load_dotenv()
 # Token bota Telegram
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = int(os.getenv("CHAT_ID"))
+
+bot = Bot(token=TELEGRAM_TOKEN)
 
 # Połączenie z blockchainem INK
 INK_RPC_URL = "https://rpc-gel.inkonchain.com"
@@ -75,32 +78,59 @@ async def list_wallets(update: Update, context: CallbackContext):
     else:
         await update.message.reply_text("🚫 Nie śledzisz żadnych portfeli!")
 
-# Funkcja sprawdzająca nowe transakcje
-async def check_transactions():
+# Funkcja sprawdzająca nowe transakcje, w tym tokeny ERC-20
+def check_transactions():
     latest_block = web3.eth.block_number
+    print("🚀 Monitorowanie transakcji i tokenów ERC-20 rozpoczęte...")
+    
     while True:
         new_block = web3.eth.block_number
         if new_block > latest_block:
+            print(f"🔍 Nowy blok: {new_block}")
             block = web3.eth.get_block(new_block, full_transactions=True)
             wallets = load_wallets()
             for tx in block.transactions:
+                # Sprawdzenie natywnych transakcji INK
                 if tx["from"] in wallets or tx["to"] in wallets:
-                    message = f"📢 Nowa transakcja!\n\n🔹 Od: {tx['from']}\n🔹 Do: {tx['to']}\n🔹 Wartość: {web3.from_wei(tx['value'], 'ether')} INK\n🔹 Hash: {tx['hash'].hex()}"
-                    await application.bot.send_message(chat_id=CHAT_ID, text=message)
+                    message = f"📢 Nowa transakcja INK!\n🔹 Od: {tx['from']}\n🔹 Do: {tx['to']}\n🔹 Wartość: {web3.from_wei(tx['value'], 'ether')} INK\n🔹 Hash: {tx['hash'].hex()}"
+                    bot.send_message(chat_id=CHAT_ID, text=message)
                     print(message)
+                
+                # Sprawdzenie transakcji ERC-20
+                receipt = web3.eth.get_transaction_receipt(tx['hash'])
+                for log in receipt.logs:
+                    if log.address in wallets:
+                        try:
+                            # Próba dekodowania logów ERC-20
+                            decoded = web3.eth.abi.decode_log(
+                                [{"indexed": True, "name": "from", "type": "address"},
+                                 {"indexed": True, "name": "to", "type": "address"},
+                                 {"indexed": False, "name": "value", "type": "uint256"}],
+                                log.data,
+                                log.topics[1:]
+                            )
+                            message = f"💰 Token ERC-20!\n🔹 Od: {decoded['from']}\n🔹 Do: {decoded['to']}\n🔹 Wartość: {web3.from_wei(decoded['value'], 'ether')} TOKEN\n🔹 Hash: {tx['hash'].hex()}"
+                            bot.send_message(chat_id=CHAT_ID, text=message)
+                            print(message)
+                        except:
+                            pass
+
             latest_block = new_block
         time.sleep(10)  # Sprawdza co 10 sekund
 
 # Uruchomienie bota Telegram
 def main():
-    global application
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    
+    app.add_handler(CommandHandler("add", add_wallet))
+    app.add_handler(CommandHandler("remove", remove_wallet))
+    app.add_handler(CommandHandler("list", list_wallets))
 
-    application.add_handler(CommandHandler("add", add_wallet))
-    application.add_handler(CommandHandler("remove", remove_wallet))
-    application.add_handler(CommandHandler("list", list_wallets))
+    # Uruchamiamy funkcję sprawdzającą transakcje w osobnym wątku
+    threading.Thread(target=check_transactions, daemon=True).start()
 
-    application.run_polling()
+    print("🤖 Bot Telegram uruchomiony!")
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
