@@ -16,7 +16,7 @@ CHAT_ID = int(os.getenv("CHAT_ID"))
 bot = Bot(token=TELEGRAM_TOKEN)
 
 # Połączenie z blockchainem INK
-INK_RPC_URL = "https://ink.drpc.org"
+INK_RPC_URL = "https://rpc-gel.inkonchain.com"
 web3 = Web3(Web3.HTTPProvider(INK_RPC_URL))
 
 # Plik do przechowywania adresów portfeli
