@@ -23,11 +23,17 @@ web3 = Web3(Web3.HTTPProvider(INK_RPC_URL))
 # Plik do przechowywania adresów portfeli
 WALLETS_FILE = "wallets.json"
 
-# Sprawdzenie połączenia
-if web3.is_connected():
-    print("✅ Połączono z siecią INK!")
-else:
-    print("❌ Błąd połączenia!")
+# Sprawdzenie połączenia z blockchainem
+if not web3.is_connected():
+    print("❌ Błąd połączenia z blockchainem INK!")
+    exit()
+
+# Pobranie aktualnego bloku
+try:
+    latest_block = web3.eth.get_block('latest').number
+    print(f"🔍 Ostatni blok: {latest_block}")
+except Exception as e:
+    print(f"❌ Błąd pobierania bloku: {e}")
     exit()
 
 # Funkcja zapisywania adresów do pliku
