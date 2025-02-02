@@ -28,7 +28,6 @@ if not web3.is_connected():
     print("❌ Błąd połączenia z blockchainem INK!")
     exit()
 
-# Pobranie aktualnego bloku
 try:
     latest_block = web3.eth.get_block('latest').number
     print(f"🔍 Ostatni blok: {latest_block}")
