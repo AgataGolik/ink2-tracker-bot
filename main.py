@@ -79,6 +79,8 @@ async def list_wallets(update: Update, context: CallbackContext):
         await update.message.reply_text("🚫 Nie śledzisz żadnych portfeli!")
 
 # Funkcja sprawdzająca nowe transakcje, w tym tokeny ERC-20
+import web3.exceptions
+
 def check_transactions():
     latest_block = web3.eth.block_number
     print("🚀 Monitorowanie transakcji i tokenów ERC-20 rozpoczęte...")
@@ -89,6 +91,7 @@ def check_transactions():
             print(f"🔍 Nowy blok: {new_block}")
             block = web3.eth.get_block(new_block, full_transactions=True)
             wallets = load_wallets()
+            
             for tx in block.transactions:
                 # Sprawdzenie natywnych transakcji INK
                 if tx["from"] in wallets or tx["to"] in wallets:
@@ -96,12 +99,17 @@ def check_transactions():
                     bot.send_message(chat_id=CHAT_ID, text=message)
                     print(message)
                 
-                # Sprawdzenie transakcji ERC-20
-                receipt = web3.eth.get_transaction_receipt(tx['hash'])
+                # Pobranie szczegółów transakcji
+                try:
+                    receipt = web3.eth.get_transaction_receipt(tx['hash'])
+                except web3.exceptions.TransactionNotFound:
+                    print(f"⚠️ Transakcja {tx['hash'].hex()} nie została znaleziona, pomijam.")
+                    continue  # Przechodzimy do następnej transakcji
+
+                # Sprawdzenie logów dla ERC-20
                 for log in receipt.logs:
                     if log.address in wallets:
                         try:
-                            # Próba dekodowania logów ERC-20
                             decoded = web3.eth.abi.decode_log(
                                 [{"indexed": True, "name": "from", "type": "address"},
                                  {"indexed": True, "name": "to", "type": "address"},
@@ -112,8 +120,8 @@ def check_transactions():
                             message = f"💰 Token ERC-20!\n🔹 Od: {decoded['from']}\n🔹 Do: {decoded['to']}\n🔹 Wartość: {web3.from_wei(decoded['value'], 'ether')} TOKEN\n🔹 Hash: {tx['hash'].hex()}"
                             bot.send_message(chat_id=CHAT_ID, text=message)
                             print(message)
-                        except:
-                            pass
+                        except Exception as e:
+                            print(f"❌ Błąd dekodowania logów: {e}")
 
             latest_block = new_block
         time.sleep(10)  # Sprawdza co 10 sekund
