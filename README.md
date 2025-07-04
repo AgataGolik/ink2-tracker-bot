@@ -1,3 +1,3 @@
 # ink2-tracker-bot
 
-yes, no
+yes, no go
